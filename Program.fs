@@ -5,6 +5,7 @@ open CharParsers
 (* Types *)
 type Parser<'t> = Primitives.Parser<'t,unit>
 type Expression =
+  | Function of param : string * body : Expression
   | LetIn of string * Expression * Expression
   | Add of Expression * Expression
   | Subtract of Expression * Expression
@@ -26,7 +27,7 @@ let pIdentifierExpr = pIdentifier |>> Identifier
 let rec sum s = s |> chainl1 product (choice [consume '+' >>% curry Add; consume '-' >>% curry Subtract])
 and sumP : Parser<Expression,unit> = sum
 and product s = s |> chainl1 atom    (choice [consume '*' >>% curry Multiply; consume '/' >>% curry Divide])
-and atom s = s |> choice [ letIn; consume '(' >>. sum .>> consume ')'; integer; pIdentifierExpr ]
+and atom s = s |> choice [ letIn; func; consume '(' >>. sum .>> consume ')'; integer; pIdentifierExpr ]
 and integer =
   let number : Parser<NumberLiteral> = numberLiteral (NumberLiteralOptions.AllowFraction ||| NumberLiteralOptions.AllowMinusSign) "number"
   let isInteger (i : NumberLiteral) = if i.IsInteger then preturn (System.Int32.Parse(i.String)) else fail (sprintf "Not an integer: %s" i.String)
@@ -39,6 +40,11 @@ and letIn =
     valueExpression
     sumP
     (fun x y z -> LetIn(x, y, z))
+and func =
+  pipe2
+    (tokenStr "fun" >>. pIdentifier .>> spaces .>> tokenStr "->")
+    sumP
+    (fun x y -> Function(x,y))
 
 (* Parsers *)
 let test p str =
@@ -53,5 +59,5 @@ let output = function
 [<EntryPoint>]
 let main argv =
   //test sum "20+(21+3)*3" |> output
-  test (sum .>> eof) "let foo = 4 in foo*4" |> output
+  test (sum .>> eof) "let foo = fun x -> 4*x  in foo*4" |> output
   0 // return an integer exit code

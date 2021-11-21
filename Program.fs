@@ -5,6 +5,7 @@ open CharParsers
 (* Types *)
 type Parser<'t> = Primitives.Parser<'t,unit>
 type Expression =
+  | Call of Expression * Expression
   | Function of param : string * body : Expression
   | LetIn of string * Expression * Expression
   | Add of Expression * Expression
@@ -14,39 +15,58 @@ type Expression =
   | Integer of int
   | Identifier of string
 
+let keywords = ["let"; "in"; "fun"]
 let curry f = fun x -> fun y -> f(x,y)
 
 let token p = p .>> spaces
-let tokenStr str = token (skipString str)
-let consume c = token (skipChar c)
-let pIdentifier =
+let str s = token (skipString s)
+let consume c = skipChar c
+let consume_ws c = token (skipChar c)
+let isNotKeyword s = if List.contains s keywords then fail (sprintf "'%s' is a reserved word" s) else preturn s
+let consumeIdentifier =
   let isIdentifierFirstChar c = isLetter c || c = '_'
   let isIdentifierChar c = isLetter c || isDigit c || c = '_'
-  (many1Satisfy2L isIdentifierFirstChar isIdentifierChar "identifier")
-let pIdentifierExpr = pIdentifier |>> Identifier
-let rec sum s = s |> chainl1 product (choice [consume '+' >>% curry Add; consume '-' >>% curry Subtract])
-and sumP : Parser<Expression,unit> = sum
-and product s = s |> chainl1 atom    (choice [consume '*' >>% curry Multiply; consume '/' >>% curry Divide])
-and atom s = s |> choice [ letIn; func; consume '(' >>. sum .>> consume ')'; integer; pIdentifierExpr ]
+  let p = (many1Satisfy2L isIdentifierFirstChar isIdentifierChar "identifier")
+  p >>=? isNotKeyword
+let identifier = consumeIdentifier |>> Identifier
+
+let rec expr s = s |> choice [ letIn; call; sum ]
+and sum s =
+  s |> chainl1
+    product
+    (choice [
+      consume_ws '+' >>% curry Add
+      consume_ws '-' >>% curry Subtract])
+and product s =
+  s |> chainl1
+    atom
+    (choice [
+      consume_ws '*' >>% curry Multiply
+      consume_ws '/' >>% curry Divide])
+and parenthesized = consume_ws '(' >>. expr .>> consume ')'
+and call =
+  let firstFunc = (parenthesized <|> identifier) .>> spaces1
+  let args = sepBy1 expr spaces1 
+  (attempt firstFunc .>>. args) |>> (fun (f, args) -> List.fold (curry Call) f args)
+and atom = choice [ func; parenthesized; integer; identifier ]
 and integer =
   let number : Parser<NumberLiteral> = numberLiteral (NumberLiteralOptions.AllowFraction ||| NumberLiteralOptions.AllowMinusSign) "number"
   let isInteger (i : NumberLiteral) = if i.IsInteger then preturn (System.Int32.Parse(i.String)) else fail (sprintf "Not an integer: %s" i.String)
   number >>=? isInteger |>> Integer
 and letIn =
-  let lhs = (tokenStr "let") >>. pIdentifier .>> spaces .>> tokenStr "="
-  let valueExpression = sumP .>> spaces .>> tokenStr "in"
+  let lhs = (str "let") >>. consumeIdentifier .>> spaces .>> str "=" .>> spaces
+  let valueExpression = expr .>> spaces .>> str "in"
   pipe3
     lhs
     valueExpression
-    sumP
+    expr
     (fun x y z -> LetIn(x, y, z))
 and func =
   pipe2
-    (tokenStr "fun" >>. pIdentifier .>> spaces .>> tokenStr "->")
-    sumP
+    (str "fun" >>. consumeIdentifier .>> spaces .>> str "->")
+    expr
     (fun x y -> Function(x,y))
 
-(* Parsers *)
 let test p str =
   match run p str with
   | Success(result, _, _) -> Result.Ok(result)
@@ -58,6 +78,6 @@ let output = function
   
 [<EntryPoint>]
 let main argv =
-  //test sum "20+(21+3)*3" |> output
-  test (sum .>> eof) "let foo = fun x -> 4*x  in foo*4" |> output
+  //test ((expr .>> eof)) "f 3 (4-4) foo" |> output
+  test ((expr .>> eof)) "let f = fun x -> fun y -> x*y in f 3 4" |> output
   0 // return an integer exit code

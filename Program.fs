@@ -8,5 +8,8 @@ let output = function
   
 [<EntryPoint>]
 let main argv =
-  test program "let f = fun x -> fun y -> x*y in f 3 4" |> output
+  //let ast = parse program "let f = fun x -> fun y -> x*y in f 3 4"
+  let ast = parse program "let f = fun x -> x*4 in f 3"
+  let res = Result.map (Interpreter.interpret') ast
+  printfn "%A" res
   0 // return an integer exit code

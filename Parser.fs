@@ -58,7 +58,7 @@ and func =
     (fun x y -> Function(x,y))
 and program = expr .>> eof
 
-let test p str =
+let parse p str =
   match run p str with
   | Success(result, _, _) -> Result.Ok(result)
   | Failure(errorMsg, _, _) -> Result.Error(errorMsg)

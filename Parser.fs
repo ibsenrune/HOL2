@@ -1,15 +1,18 @@
 module Parser
+#nowarn "40"
 
 open FParsec
 open CharParsers
 open Ast
 
 type Parser<'t> = Primitives.Parser<'t,unit>
-let keywords = ["let"; "in"; "fun"]
+let keywords = ["let"; "in"; "fun"; "if"; "then"; "else" ]
 let curry f = fun x -> fun y -> f(x,y)
 
 let token p = p .>> spaces
 let str s = token (skipString s)
+let foo = (>>)
+let keyword s = spaces .>> (skipString s) .>> spaces
 let consume c = skipChar c
 let consume_ws c = token (skipChar c)
 let isNotKeyword s = if List.contains s keywords then fail (sprintf "'%s' is a reserved word" s) else preturn s
@@ -20,7 +23,7 @@ let consumeIdentifier =
   p >>=? isNotKeyword
 let identifier = consumeIdentifier |>> Identifier
 
-let rec expr s = s |> choice [ letIn; call; sum ]
+let rec expr s = s |> choice [ ifThenElse; letIn; call; sum ]
 and sum s =
   s |> chainl1
     product
@@ -34,10 +37,17 @@ and product s =
       consume_ws '*' >>% curry Multiply
       consume_ws '/' >>% curry Divide])
 and parenthesized = consume_ws '(' >>. expr .>> consume ')'
+and ifThenElse =
+  pipe3
+    (keyword "if" >>. expr)
+    (keyword "then" >>. expr)
+    (keyword "else" >>. expr)
+    (fun x y z -> IfThenElse(x,y,z))
 and call =
   let firstFunc = (parenthesized <|> identifier) .>> spaces1
   let args = sepBy1 expr spaces1 
-  (attempt firstFunc .>>. args) |>> (fun (f, args) -> List.fold (curry Call) f args)
+  let call' = (firstFunc .>>. args) |>> (fun (f, args) -> List.fold (curry Call) f args)
+  attempt call'
 and atom = choice [ func; parenthesized; integer; identifier ]
 and integer =
   let number : Parser<NumberLiteral> = numberLiteral (NumberLiteralOptions.AllowFraction ||| NumberLiteralOptions.AllowMinusSign) "number"

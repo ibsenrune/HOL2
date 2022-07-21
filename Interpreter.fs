@@ -5,6 +5,7 @@ type Value =
   | Integer of int
   | Function of string * Expression
 type Environment = Map<string, Value>
+
 let rec interpret (env : Environment) (expr : Expression) : Result<Value,string> =
   let interEnv = interpret env
   let binaryArithmetic op lhs rhs =

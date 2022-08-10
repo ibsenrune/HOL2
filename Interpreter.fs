@@ -10,8 +10,6 @@ let combineEnvironments (inner : Environment) (outer : Environment) : Environmen
   ((Map.toList inner), (Map.toList outer)) ||> List.append |> Map.ofList
 
 let rec interpret (env : Environment) (expr : Expression) : Result<Value,string> =
-  //printfn "%A in %A" expr env
-  //printfn "----"
   let interEnv = interpret env
   let binaryArithmetic op lhs rhs =
     match interEnv lhs, interEnv rhs with
@@ -37,7 +35,7 @@ let rec interpret (env : Environment) (expr : Expression) : Result<Value,string>
       match value with
       | Ok(v) -> 
         let env' = Map.add name v env
-        interpret env' body //Her er problemet
+        interpret env' body 
       | Error(s) -> Error(s)
   | Add(lhs, rhs) -> binaryArithmetic (+) lhs rhs
   | Subtract(lhs, rhs) -> binaryArithmetic (-) lhs rhs

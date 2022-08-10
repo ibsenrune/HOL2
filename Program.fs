@@ -10,14 +10,19 @@ let output = function
 let getOk = function
 | Result.Ok(r) -> r
 | Result.Error(msg) -> failwith (sprintf "Failed: %s" msg)
+
+let readProgram = function
+  | [| path |] when System.IO.File.Exists(path) -> Some(System.IO.File.ReadAllText(path)) 
+  | _ -> None
+
+let printHelp unit : unit = printfn("No file provided")
   
 [<EntryPoint>]
 let main argv =
-  let ast = parse program "((fun x -> fun y -> x*y) 3 4)+2" //virker ikke
-  let res = Result.bind Interpreter.interpret' ast
-  //let res = closedIn 
-  //            (LetIn("x", Integer 3, Multiply ((Identifier "x"), (Identifier "x"))))
-  //            ["foo"]
-  //let res = closedIn ast []
-  printfn "%A" res
+  match readProgram argv with
+  | None -> printHelp ()
+  | Some(text) ->
+      let ast = parse program "let f = fun x -> 2*x in let g = fun y -> 3*y in f (g 4)"
+      let res = Result.bind Interpreter.interpret' ast
+      printfn "%A" res
   0 // return an integer exit code
